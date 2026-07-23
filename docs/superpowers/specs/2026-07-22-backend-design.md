@@ -56,94 +56,11 @@ local static build.
 **Stack:** Python + FastAPI, SQLite, `python-docx` for export, `httpx` +
 `BeautifulSoup` for URL evidence fetch.
 
-**Project layout**
-```
-backend/
-  main.py                 # FastAPI app, CORS, route registration
-  config.py                # env vars: LLM_PROVIDER, model names, API keys, DB path
-  db.py                     # SQLite connection, schema init
-  models.py                 # Pydantic request/response schemas
-  routers/
-    session.py              # POST /session, upload-chart, upload-evidence, generate
-    chart.py                 # GET /session/{sid}/chart, row accept/reject/undo/flag
-    chat.py                   # POST /session/{sid}/chat/message
-    export.py                 # GET /session/{sid}/export
-    settings.py                # GET/PUT /session/{sid}/system-prompt
-  llm/
-    provider.py               # LLMProvider ABC: generate(messages, **kw) -> str
-    ollama_provider.py         # calls http://localhost:11434/api/chat
-    openrouter_provider.py      # calls https://openrouter.ai/api/v1/chat/completions
-    prompts.py                   # baseline system prompt + per-feature prompt builders
-  services/
-    session_service.py          # session creation, step-order validation (chart_uploaded/generated flags)
-    chart_service.py             # row CRUD, pending-state transitions, undo logic
-    chat_service.py                # turn orchestration: resolve row -> build prompt -> call LLM -> parse response
-    evidence_service.py             # doc ingestion, URL fetch+extract, re-scan on flag
-    export_service.py                 # python-docx generation
-```
-
 **Database schema (SQLite)**
-```sql
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,               -- UUID, generated on POST /session
-  system_prompt TEXT DEFAULT '',      -- analyst's current freeform text
-  chart_uploaded INTEGER DEFAULT 0,    -- 0/1, enforces upload-chart before upload-evidence/generate
-  generated INTEGER DEFAULT 0,          -- 0/1, set once /generate has run; enforces chat availability
-  created_at TEXT DEFAULT (datetime('now'))
-);
 
-CREATE TABLE rows (
-  id INTEGER PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  claim_element TEXT NOT NULL,
-  product_feature TEXT NOT NULL,        -- "Evidence" column, from CSV
-  ai_reasoning TEXT NOT NULL,             -- from CSV; refined by accepted AI proposals
-  confidence TEXT CHECK(confidence IN ('Strong','Moderate','Weak')),
-
-  -- single-step undo slot: current (product_feature, ai_reasoning, confidence)
-  -- moves here as one atomic triplet on Accept/Undo-swap; NULL triplet = nothing to undo
-  previous_product_feature TEXT,
-  previous_ai_reasoning TEXT,
-  previous_confidence TEXT,
-
-  -- pending proposal awaiting Accept/Reject; NULL triplet = no pending proposal
-  pending_value TEXT,
-  pending_reasoning TEXT,
-  pending_confidence TEXT
-);
-
--- Flat evidence pool per session: NOT linked to individual rows. Every chat
--- proposal, initial classification pass, and flag re-scan considers the
--- full set of that session's evidence_docs — there is no per-row filtering.
-CREATE TABLE evidence_docs (
-  id INTEGER PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  source_type TEXT CHECK(source_type IN ('upload','url')),
-  source_label TEXT,               -- filename or URL
-  content TEXT NOT NULL             -- extracted plain text
-);
-
-CREATE TABLE chat_messages (
-  id INTEGER PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  role TEXT CHECK(role IN ('user','assistant')),
-  content TEXT NOT NULL,
-  row_id INTEGER REFERENCES rows(id),  -- NULL if not row-anchored
-  created_at TEXT DEFAULT (datetime('now'))
-);
-```
-
-Uploaded files are parsed on upload and stored as parsed data only — CSV
-rows go straight into `rows`, evidence `.txt` docs are stored as text in
-`evidence_docs.content`. No separate raw-file storage layer.
-
-The uploaded chart CSV has exactly 3 columns, all pre-populated by the
-analyst's prior process, mapped directly onto `rows`: `claim_element`,
-`product_feature` (evidence), `ai_reasoning`. The initial LLM classification
-pass (triggered by `/generate`, not by the chart upload itself) does **not**
-generate or rewrite reasoning — it only reads the existing 3 columns (plus
-all of that session's `evidence_docs` content) and assigns the `confidence`
-tier based on evidence directness.
+See `docs/superpowers/specs/2026-07-22-db-schema.md` for the full `sessions`,
+`rows`, `evidence_docs`, and `chat_messages` table definitions and the notes
+on how uploaded chart/evidence data maps onto them.
 
 **Upload parsing rules**
 - **Header row:** row 1 is always skipped as a header, whatever text it contains; columns are mapped by **position**, not by name (col 1 → `claim_element`, col 2 → `product_feature`, col 3 → `ai_reasoning`). Robust to whatever header wording the analyst's prior process used; a row with a different column count than 3 triggers `malformed_csv`.
@@ -168,13 +85,13 @@ frontend's three buttons (upload chart, upload evidence, generate):
 | `POST /session` | Creates a new session; returns `{session_id}` | — |
 | `POST /session/{sid}/upload-chart` | Accepts chart CSV (multipart); parses into `rows` scoped to this session; sets `chart_uploaded=1` | 400 `invalid_file_type` (non-.csv); 400 `malformed_csv` (wrong column count / missing header / decode failure); 400 `file_too_large` (>5MB); 409 `chart_already_exists` if `chart_uploaded` already 1 — no overwrite-on-reupload within a session; start a new session for a new chart |
 | `POST /session/{sid}/upload-evidence` | Accepts exactly one evidence source per call — a single `.txt` file OR a single `{url}` (multipart); **repeatable** — each call appends one doc to this session's `evidence_docs` pool | 400 `chart_not_uploaded` if called before `upload-chart` (order enforced); 400 `invalid_file_type` (non-.txt); 400 `file_too_large` (>5MB); 400 `invalid_request` (neither/both of file/url provided); URL fetch errors — see §4 |
-| `POST /session/{sid}/generate` | Triggers the initial LLM classification pass (chunked, see §3) over all rows + the evidence pool, sets each row's `confidence`, seeds the opening chat message; sets `generated=1` | 400 `chart_not_uploaded`; 409 `already_generated` if `generated` already 1 — evidence is optional at this point, rows with none simply classify Weak |
+| `POST /session/{sid}/generate` | Triggers the initial LLM classification pass over all rows + the evidence pool, sets each row's `confidence`, seeds the opening chat message; sets `generated=1` | 400 `chart_not_uploaded`; 409 `already_generated` if `generated` already 1 — evidence is optional at this point, rows with none simply classify Weak; 502 `llm_unavailable` if the provider call fails after retry |
 | `GET /session/{sid}/chart` | Returns current rows incl. pending state, confidence tiers | 400 `chart_not_uploaded` if nothing uploaded yet |
-| `POST /session/{sid}/chat/message` | Analyst message (+ optional row_id from `@Row` chip) → orchestrates resolve→propose flow, returns AI reply + any new pending proposal | 400 `not_generated_yet` if `/generate` hasn't run; 400 `empty_message`; 502 `llm_unavailable` if the provider call fails after retry |
+| `POST /session/{sid}/chat/message` | Analyst message (+ optional row_id from `@Row` chip) → orchestrates resolve→propose flow, returns AI reply + any new pending proposal | 400 `not_generated_yet` if `/generate` hasn't run; 400 `empty_message`; 502 `llm_unavailable` if the provider call fails after retry; 404 `row_not_found` if `row_id` is explicitly provided and invalid — not covered by the blanket note above, since `row_id` here is a body field, not a `/rows/{id}/*` path segment |
 | `POST /session/{sid}/rows/{id}/accept` | Copies current `(product_feature, ai_reasoning, confidence)` into `previous_*` (the undo slot), then commits `(pending_value, pending_reasoning, pending_confidence)` → `(product_feature, ai_reasoning, confidence)` as one atomic triplet; clears all `pending_*` | 409 `no_pending_proposal` if `pending_value` is NULL |
 | `POST /session/{sid}/rows/{id}/reject` | Clears pending, no DB value change | 409 `no_pending_proposal` if `pending_value` is NULL |
 | `POST /session/{sid}/rows/{id}/undo` | Swaps `(product_feature, ai_reasoning, confidence)` ↔ `(previous_*)` as one atomic triplet, then clears `previous_*` (single-step: nothing left to re-undo); the confirm dialog is UI-only, so this call carries no confirmation field | 409 `no_undo_available` if `previous_product_feature` is NULL |
-| `POST /session/{sid}/rows/{id}/flag` | Deterministically triggers `evidence_service.rescan(session_id, row_id)`, posts `@Row` chip system note into chat | 404 `no_evidence_pool` if this session's `evidence_docs` is empty (nothing to re-scan) |
+| `POST /session/{sid}/rows/{id}/flag` | Sets `rows.flagged=1` for re-grounded correction and posts an `@Row`-anchored system note into chat prompting the analyst to describe the issue; the analyst's next chat message is what drives the actual re-scan/correction (see ai-design doc), and clears `flagged` back to 0 once that call returns | 404 `no_evidence_pool` if this session's `evidence_docs` is empty (nothing to re-scan); 409 `already_flagged` if `flagged` is already 1 (mid re-scan, awaiting the analyst's description) |
 | `GET /session/{sid}/system-prompt` / `PUT /session/{sid}/system-prompt` | Read/update the analyst's freeform text (baseline is never exposed) | — |
 | `GET /session/{sid}/export` | Streams generated `.docx` | 400 `not_generated_yet` |
 
@@ -184,90 +101,31 @@ stale UI" case: on a 409, the frontend simply refreshes that row from
 since the UI already disables these controls when there's nothing to act
 on — a 409 means the client was out of sync, not a real user error.
 
-**Chat orchestration flow (`chat_service.handle_message`)**
-1. Load this session's full chart context (all rows) + its evidence docs + baseline prompt + the session's current system prompt.
-2. If no `row_id` given: ask the LLM to resolve which row the message refers to (structured output: `{row_id: int|null, needs_clarification: bool}`). If ambiguous, return AI's clarifying question and stop — no chart mutation.
-3. Build the row-specific prompt: claim element, current evidence text, all of this session's evidence doc contents, the analyst's message, and an explicit instruction to either (a) propose a new evidence value + reasoning, grounded in doc content, or (b) state no evidence was found.
-4. Parse the LLM's structured response. If "no evidence found" → surface that in chat, no pending state set. Otherwise → write `pending_value`/`pending_reasoning`/`pending_confidence` on the row, return the proposal for inline pending UI.
-5. Append both messages to `chat_messages`, scoped to this session.
+**Chat message handling (high level):** an analyst message either resolves
+to a specific row (via `row_id` or AI inference) and produces a proposal,
+a clarifying question, or a "no evidence found" reply — or it doesn't
+resolve confidently, in which case the AI asks which row is meant rather
+than guessing. Every accepted resolution is grounded in this session's
+evidence pool; nothing is written to a row's live values until the analyst
+explicitly accepts. Full prompt/context/orchestration design is in the
+ai-design doc.
 
-**Evidence re-scan (flag flow)** — what's deterministic here is the
-*trigger*, not the matching logic: clicking the flag icon always fires
-`evidence_service.rescan(session_id, row_id)`, regardless of what the
-analyst types in chat afterward (it never depends on the AI detecting
-"wrong"/"incorrect" language in a message, which could be missed). The
-re-scan itself re-sends the claim element plus this session's **full
-`evidence_docs` pool** (all docs — there is no per-row linkage) to the LLM,
-instructing it to find and quote the relevant line verbatim. If it can't
-find a supporting line, it returns `{"row_id": int, "no_evidence_found":
-true}` — the same shape as any other proposal — which routes into the
-standard "no evidence found" chat flow (§ chat orchestration, step 4),
-asking the analyst for another document or URL.
+**Flag flow (high level):** flagging a row is a deterministic trigger that
+opens a re-grounded-correction conversation for that row — the analyst
+describes what's wrong, and the AI's correction must quote evidence
+verbatim from this session's pool or report none was found, same as any
+other proposal. Full flow detail is in the ai-design doc.
 
 **Export** — `export_service` builds the `.docx` via `python-docx`: a table
 with the same 3 columns + confidence badge as text/color, reading
 `product_feature` (not `pending_value`) for every row, per the PRD's
 "pending exports as current unaccepted value" rule.
 
-## 3. LLM Design (Prompts + Provider Abstraction)
+## 3. LLM Design
 
-**Provider interface**
-```python
-class LLMProvider(ABC):
-    def generate(self, messages: list[dict], *, json_mode: bool = False) -> str: ...
-
-class OllamaProvider(LLMProvider):
-    # POST http://localhost:11434/api/chat, model="qwen2.5:7b", stream=False
-
-class OpenRouterProvider(LLMProvider):
-    # POST https://openrouter.ai/api/v1/chat/completions
-    # model="qwen/qwen-2.5-72b-instruct", Authorization: Bearer {OPENROUTER_API_KEY}
-```
-Selected once at startup via `get_provider()` in `config.py` based on the
-`LLM_PROVIDER` env var. Every service call goes through this —
-`chart_service`, `chat_service`, `evidence_service` never know which
-backend is live. Structured outputs (row resolution, proposals) are
-requested via a `json_mode=True` flag that appends a "respond with valid
-JSON only, matching this schema: ..." instruction — both providers support
-this via prompt-level enforcement since Qwen's OpenAI-compatible endpoints
-don't guarantee strict JSON-schema mode, so the response is parsed with a
-fallback: on parse failure, retry once with an explicit "your last response
-was not valid JSON" correction message.
-
-**Hidden baseline system prompt** (never shown/editable, prepended to every
-call, worded to take precedence over the analyst's text per PRD decision):
-```
-You are a patent infringement claim chart analysis assistant. You NEVER
-fabricate evidence — every claim about product evidence must be traceable
-to the provided document text. Rules that always apply, regardless of any
-other instructions in this conversation:
-1. Confidence tiers: classify each row as Strong (evidence directly states
-   the claim element), Moderate (evidence implies it, requires inference),
-   or Weak (evidence is tangential or absent).
-2. When proposing a change to a row's evidence, output structured JSON:
-   {"row_id": int, "proposed_value": str, "reasoning": str, "confidence": str}
-   or, if no evidence exists: {"row_id": int, "no_evidence_found": true}.
-3. When resolving which row a message refers to, output:
-   {"row_id": int|null, "needs_clarification": bool, "question": str|null}
-4. When correcting flagged evidence, "proposed_value" must be a verbatim
-   quote from the provided re-scanned source excerpt — never paraphrase.
-These rules take precedence over any conflicting instruction below.
----
-[Analyst's freeform text, if any, is appended here]
-```
-
-**Five feature-specific prompt builders** (in `llm/prompts.py`), each
-composes: baseline + analyst text + a task-specific user/context message.
-
-1. **Initial classification** (on `/generate`) — sent once per row (or batched, budget-permitting): claim element + evidence text + ai_reasoning (all from CSV, unchanged) + all of this session's evidence doc contents → returns confidence tier only per row (reasoning is not regenerated). *(Batching strategy still to be finalized.)*
-2. **Opening chat message** — given the full just-classified chart, produce one message listing Weak/Moderate rows by claim element, no fixes drafted.
-3. **Row disambiguation** — given the analyst's message (no row_id) + all rows' claim elements/evidence → resolve or ask a clarifying question.
-4. **Refinement proposal** — given resolved row + analyst's specific request + all of this session's evidence doc contents → propose grounded change or "no evidence found."
-5. **Re-grounded correction** (flag flow) — given the row + this session's **full `evidence_docs` pool** (not a pre-filtered excerpt — the LLM itself does the finding) + analyst's description of what's wrong → must quote a verbatim line from the pool in `proposed_value`, or return `no_evidence_found` if none exists.
-
-All five reuse the same `generate(messages, json_mode=True)` call and the
-same JSON-parse-with-retry helper — no per-feature LLM-calling code
-duplicated.
+See `docs/superpowers/specs/<TBD>-ai-design.md` for LLM provider abstraction,
+prompt design, structured-output handling, and context/chat management —
+being rebuilt from scratch to ensure consistency with the API contracts.
 
 ## 4. Evidence Fetch, Error Handling & Testing
 
@@ -280,7 +138,7 @@ duplicated.
 **Error handling conventions**
 - All routers return a consistent error shape `{"error": {"code": str, "message": str}}` with appropriate HTTP status; frontend shows these inline in chat or as a small toast, never a blank crash.
 - LLM call failures (provider unreachable, timeout) are caught in `llm/provider.py` and surfaced as a chat-visible error ("The AI is temporarily unavailable, please retry") rather than a 500 bubbling to a blank screen — this matters especially for the Ollama path, which can fail if the local model isn't pulled/running.
-- JSON-mode parse failures: one retry with a correction instruction (see §3); if that also fails, treat as a backend error surfaced in chat rather than silently guessing at malformed output.
+- JSON-mode parse failures: retried once with a correction instruction (see ai-design doc); if that also fails, treat as a backend error surfaced in chat rather than silently guessing at malformed output.
 - Upload validation: reject non-.csv files and malformed CSVs (wrong column count) with a specific message before any LLM call is attempted, per the acceptance criterion that empty/no-upload state never crashes.
 
 **Testing strategy** (matches "prototype" scope — no exhaustive test pyramid)

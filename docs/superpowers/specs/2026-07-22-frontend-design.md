@@ -23,8 +23,9 @@ App
       ├─ ChartPanel (left)
       │    └─ ChartRow[]           (claim element / evidence / reasoning / confidence badge)
       │         ├─ PendingBanner     (shown when row.pending_value != null: Accept/Reject/Modify)
+      │         ├─ FlaggedBanner      (shown when row.flagged: "Awaiting your description of the issue in chat" — mutually exclusive with PendingBanner; clears once the analyst's next tagged message resolves, per ai-design §6.5)
       │         ├─ UndoButton         (enabled iff row.previous_* triplet is non-null)
-      │         └─ FlagIcon
+      │         └─ FlagIcon             (disabled while row.flagged is already true — re-flagging mid-re-scan is a no-op, not a new trigger)
       └─ ChatPanel (right)
            ├─ SettingsButton → SystemPromptEditor (reopened as modal/drawer)
            ├─ MessageList
@@ -50,7 +51,7 @@ multiple batches before clicking Generate.
   sessionId: string | null,           // set immediately on app load via POST /session
   chartUploaded: boolean,
   generated: boolean,
-  chart: { rows: Row[] } | null,       // populated once /generate responds
+  chart: { rows: Row[] } | null,       // populated by GET /chart, first fetched right after /generate responds
   chatMessages: ChatMessage[],
   pendingRowId: number | null,           // which row's @Row chip is staged in the input box
   systemPromptDraft: string,
@@ -70,12 +71,14 @@ that could drift from SQLite).
 - On app load: if no `sessionId` in `localStorage`, call `POST /session` and store the result before rendering `SetupScreen`.
 - **UploadChartButton** posts the CSV file to `/session/{sid}/upload-chart`; on success, dispatches `CHART_UPLOADED` and enables the other two `SetupScreen` actions.
 - **UploadEvidenceButton** opens a small picker for either file(s) or a URL text field, posts to `/session/{sid}/upload-evidence`; repeatable, each call just dispatches `EVIDENCE_UPLOADED` (no chart re-render needed since evidence isn't shown in the chart panel).
-- **GenerateButton** posts to `/session/{sid}/generate` (disabled until chart upload succeeds); on success, dispatches `GENERATED` with the classified rows + opening chat message, and switches `screen` to `'workspace'`.
+- **GenerateButton** posts to `/session/{sid}/generate` (disabled until chart upload succeeds); on success, dispatches `GENERATED` with the opening chat message (the response carries no rows, per api-contracts.md), then immediately calls `GET /session/{sid}/chart` to populate `chart.rows` with the classified rows, and switches `screen` to `'workspace'`.
+- **SettingsButton** reopens `SystemPromptEditor` at any point in `WorkspaceScreen`, not just pre-Generate; saving calls `PUT /system-prompt` and dispatches `SYSTEM_PROMPT_SAVED` — since every LLM call reads the session's current freeform text live, a mid-session edit only shapes proposals/classifications made after that point, never rewrites past ones.
 - Clicking a chart row or its **Modify** button dispatches `ROW_CHIP_STAGED(row.id)`, which prepends a non-removable `@Row[n]` chip token to `ChatInput`'s current value; submitting sends `{content, row_id}` to `/session/{sid}/chat/message`.
 - **Accept/Reject** call their row endpoints directly (no chat message involved) and just re-render that row from the response.
 - **Undo** opens a lightweight confirm dialog (plain component, no library needed) before calling `/session/{sid}/rows/{id}/undo`.
 - **Flag** calls `/session/{sid}/rows/{id}/flag`, then stages that row's chip in chat input (same mechanism as Modify) so the analyst can describe the issue in their next message.
 - **Export** is a plain `<a href="/session/{sid}/export">` / fetch-blob-and-download — no state dependency, works once `generated` is true.
+- **409 on accept/reject/undo** (`no_pending_proposal`/`no_undo_available`): per backend-design.md, this means the client was out of sync (double-click / stale UI), not a real user error — the frontend silently refetches that row via `GET /session/{sid}/chart` instead of surfacing a toast.
 
 **Testing** — no formal test suite planned for the prototype; manual
 click-through of the full flow (create session → upload chart → upload

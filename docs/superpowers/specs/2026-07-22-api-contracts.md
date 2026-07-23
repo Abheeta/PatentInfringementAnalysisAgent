@@ -118,6 +118,7 @@ referenced elsewhere in this doc.
       "product_feature": "The device includes a Snapdragon processor...",
       "ai_reasoning": "Product spec sheet describes signal reception via the modem chip.",
       "confidence": "Strong",
+      "flagged": false,
       "pending_value": null,
       "pending_reasoning": null,
       "pending_confidence": null,
@@ -131,6 +132,7 @@ referenced elsewhere in this doc.
       "product_feature": "No mention of onboard memory found in current sources.",
       "ai_reasoning": "No supporting evidence located.",
       "confidence": "Weak",
+      "flagged": false,
       "pending_value": "The device ships with 8GB LPDDR5 onboard memory per the teardown report.",
       "pending_reasoning": "Teardown report explicitly lists memory spec.",
       "pending_confidence": "Strong",
@@ -144,6 +146,7 @@ referenced elsewhere in this doc.
 
 | Field | Type | Notes |
 |---|---|---|
+| `flagged` | boolean | `true` while awaiting the analyst's description after a `/flag` call; cleared once the re-grounded-correction call returns. Mutually exclusive in practice with a non-null `pending_*` from the same cause, though an unrelated pending proposal from before the flag can still be present. |
 | `pending_*` | string \| null | Non-null when a proposal is awaiting Accept/Reject (row 3 above). |
 | `previous_*` | string \| null | Non-null when an accepted change can still be undone. |
 
@@ -365,6 +368,9 @@ opens the conversation.
 ```json
 // 404 no_evidence_pool
 {"error": {"code": "no_evidence_pool", "message": "No evidence has been uploaded for this session yet — nothing to re-scan."}}
+
+// 409 already_flagged
+{"error": {"code": "already_flagged", "message": "Row 3 is already awaiting your description of the issue."}}
 
 // 404 row_not_found
 {"error": {"code": "row_not_found", "message": "Row 3 not found in this session."}}
