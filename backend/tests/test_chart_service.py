@@ -143,3 +143,27 @@ def test_flag_then_reflag_conflict_and_clears_after_message(client, sid):
         if r["id"] == row_id
     )
     assert row["flagged"] is False
+
+
+def test_flag_blocks_flagging_other_row_until_resolved(client, sid):
+    _generate(client, sid)
+    rows = client.get(f"/session/{sid}/chart").json()["rows"]
+    row_id_1 = rows[0]["id"]
+    row_id_2 = rows[1]["id"]
+
+    r = client.post(f"/session/{sid}/rows/{row_id_1}/flag")
+    assert r.status_code == 200
+
+    r = client.post(f"/session/{sid}/rows/{row_id_2}/flag")
+    assert r.status_code == 409
+    body = r.json()["error"]
+    assert body["code"] == "already_flagged"
+    assert str(row_id_1) in body["message"]
+
+    client.post(
+        f"/session/{sid}/chat/message",
+        json={"content": "this is wrong", "row_id": row_id_1},
+    )
+
+    r = client.post(f"/session/{sid}/rows/{row_id_2}/flag")
+    assert r.status_code == 200

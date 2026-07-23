@@ -259,6 +259,16 @@ def set_flagged(sid: str, row_id: int) -> None:
                 "already_flagged",
                 f"Row {row_id} is already awaiting your description of the issue.",
             )
+        blocking = conn.execute(
+            "SELECT id FROM rows WHERE session_id = ? AND flagged = 1", (sid,)
+        ).fetchone()
+        if blocking is not None:
+            raise ApiError(
+                409,
+                "already_flagged",
+                f"Row {blocking['id']} is already awaiting your description of "
+                "the issue — resolve it before flagging another row.",
+            )
         conn.execute("UPDATE rows SET flagged = 1 WHERE id = ?", (row_id,))
         conn.commit()
     finally:
