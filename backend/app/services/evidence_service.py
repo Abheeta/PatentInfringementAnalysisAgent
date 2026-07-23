@@ -5,19 +5,18 @@ from app.db.connection import get_connection
 from app.errors import ApiError
 from app.services.session_service import get_session
 
-
-def _ensure_chart_uploaded(conn, sid: str) -> None:
-    session = get_session(sid, conn)
-    if not session["chart_uploaded"]:
-        raise ApiError(
-            400, "chart_not_uploaded", "Upload a chart before adding evidence."
-        )
+_FETCH_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
+}
 
 
 def store_uploaded_text(sid: str, filename: str, text: str) -> None:
     conn = get_connection()
     try:
-        _ensure_chart_uploaded(conn, sid)
+        get_session(sid, conn)
         conn.execute(
             """INSERT INTO evidence_docs (session_id, source_type, source_label, content)
                VALUES (?, 'upload', ?, ?)""",
@@ -31,12 +30,14 @@ def store_uploaded_text(sid: str, filename: str, text: str) -> None:
 def fetch_url(sid: str, url: str) -> None:
     conn = get_connection()
     try:
-        _ensure_chart_uploaded(conn, sid)
+        get_session(sid, conn)
     finally:
         conn.close()
 
     try:
-        response = httpx.get(url, timeout=10, follow_redirects=True)
+        response = httpx.get(
+            url, timeout=10, follow_redirects=True, headers=_FETCH_HEADERS
+        )
     except httpx.TimeoutException:
         raise ApiError(
             400,

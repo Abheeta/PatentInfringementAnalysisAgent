@@ -1,17 +1,13 @@
-import { UploadChartButton } from "../UploadChartButton";
-import { UploadEvidenceButton } from "../UploadEvidenceButton";
-import { GenerateButton } from "../GenerateButton";
 import { SettingsButton } from "./SettingsButton";
 import { ExportButton } from "./ExportButton";
+import { NewSessionButton } from "./NewSessionButton";
 
 export function ChatToolbar() {
   return (
     <div className="flex items-center gap-2 border-b border-border/60 bg-toolbar-surface px-4 py-2.5">
-      <UploadChartButton />
-      <UploadEvidenceButton />
-      <SettingsButton />
+      <NewSessionButton />
       <div className="ml-auto flex items-center gap-2">
-        <GenerateButton />
+        <SettingsButton />
         <ExportButton />
       </div>
     </div>

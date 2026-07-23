@@ -65,6 +65,10 @@ export function generate(
   return request(`/session/${sid}/generate`, { method: "POST" });
 }
 
+export function getChatHistory(sid: string): Promise<{ messages: ChatMessage[] }> {
+  return request(`/session/${sid}/chat/history`, { method: "GET" });
+}
+
 export function sendChatMessage(
   sid: string,
   body: { content: string; row_id: number | null }

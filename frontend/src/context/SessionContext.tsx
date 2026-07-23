@@ -10,6 +10,7 @@ import { ChatMessage, Row } from "../types";
 export interface SessionState {
   sessionId: string | null;
   chartUploaded: boolean;
+  evidenceUploaded: boolean;
   generated: boolean;
   chart: { rows: Row[] };
   chatMessages: ChatMessage[];
@@ -20,6 +21,7 @@ export interface SessionState {
 const initialState: SessionState = {
   sessionId: null,
   chartUploaded: false,
+  evidenceUploaded: false,
   generated: false,
   chart: { rows: [] },
   chatMessages: [],
@@ -36,16 +38,27 @@ export type SessionAction =
   | { type: "MESSAGE_SENT"; message: ChatMessage }
   | { type: "MESSAGE_RECEIVED"; message: ChatMessage }
   | { type: "ROW_CHIP_STAGED"; rowId: number | null }
-  | { type: "SYSTEM_PROMPT_SAVED"; text: string };
+  | { type: "SYSTEM_PROMPT_SAVED"; text: string }
+  | { type: "SYSTEM_PROMPT_LOADED"; text: string }
+  | { type: "SESSION_RESET"; sessionId: string }
+  | {
+      type: "STATE_RESTORED";
+      chartUploaded: boolean;
+      generated: boolean;
+      rows: Row[];
+      chatMessages: ChatMessage[];
+    };
 
 function reducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
     case "SESSION_CREATED":
       return { ...state, sessionId: action.sessionId };
+    case "SESSION_RESET":
+      return { ...initialState, sessionId: action.sessionId };
     case "CHART_UPLOADED":
       return { ...state, chartUploaded: true };
     case "EVIDENCE_UPLOADED":
-      return state;
+      return { ...state, evidenceUploaded: true };
     case "GENERATED":
       return {
         ...state,
@@ -65,7 +78,20 @@ function reducer(state: SessionState, action: SessionAction): SessionState {
     case "ROW_CHIP_STAGED":
       return { ...state, pendingRowId: action.rowId };
     case "SYSTEM_PROMPT_SAVED":
+    case "SYSTEM_PROMPT_LOADED":
       return { ...state, systemPromptDraft: action.text };
+    case "STATE_RESTORED":
+      return {
+        ...state,
+        chartUploaded: action.chartUploaded,
+        // The backend doesn't expose an evidence-status endpoint, so on a
+        // fresh page load we can only be sure evidence exists once
+        // generation has already happened.
+        evidenceUploaded: action.generated,
+        generated: action.generated,
+        chart: { rows: action.rows },
+        chatMessages: action.chatMessages,
+      };
     default:
       return state;
   }

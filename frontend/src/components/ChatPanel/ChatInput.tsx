@@ -4,11 +4,13 @@ import { getChart, sendChatMessage } from "../../api/client";
 import { ApiError } from "../../types";
 import { useSessionDispatch, useSessionState } from "../../context/SessionContext";
 import { RowChip } from "./RowChip";
+import { GenerateBar } from "./GenerateBar";
+import { UploadEvidenceButton } from "../UploadEvidenceButton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export function ChatInput() {
-  const { sessionId, pendingRowId } = useSessionState();
+  const { sessionId, pendingRowId, generated } = useSessionState();
   const dispatch = useSessionDispatch();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +51,10 @@ export function ChatInput() {
     }
   }
 
+  if (!generated) {
+    return <GenerateBar />;
+  }
+
   return (
     <div className="border-t border-border/60 px-4 py-3">
       {pendingRowId != null && (
@@ -67,6 +73,7 @@ export function ChatInput() {
           placeholder="Ask about a claim element, or click a row first…"
           className="bg-background"
         />
+        <UploadEvidenceButton variant="icon" />
         <Button
           type="button"
           size="icon"

@@ -63,7 +63,9 @@ follows up with `GET /session/{sid}/chart`.
 
 Accepts one evidence source per call — a `.txt` file or a URL — and appends
 it to this session's `evidence_docs` pool. Repeatable: call again to add
-more sources in additional batches before (or after) `/generate`.
+more sources in additional batches before (or after) `/generate`. No chart
+needs to exist first — evidence can be uploaded before, during, or after
+chart upload.
 
 **Request** — `multipart/form-data`, exactly one of:
 
@@ -78,9 +80,6 @@ isn't shown in the chart panel.
 
 **Errors**
 ```json
-// 400 chart_not_uploaded
-{"error": {"code": "chart_not_uploaded", "message": "Upload a chart before adding evidence."}}
-
 // 400 invalid_file_type
 {"error": {"code": "invalid_file_type", "message": "Only .txt files are accepted."}}
 
@@ -375,6 +374,34 @@ opens the conversation.
 // 404 row_not_found
 {"error": {"code": "row_not_found", "message": "Row 3 not found in this session."}}
 
+// 404 session_not_found
+{"error": {"code": "session_not_found", "message": "Session '3fa85f64-...' not found."}}
+```
+
+### `GET /session/{sid}/chat/history`
+
+Returns the full chat message history for the session, in chronological
+order. Used to restore the chat panel on page reload / session resume,
+since messages aren't otherwise persisted client-side.
+
+**Request** — no body, no query params.
+
+**Response — `200 OK`**
+```json
+{
+  "messages": [
+    {"id": 1, "role": "assistant", "content": "I've reviewed the chart. Rows 3 and 7 are Weak, row 5 is Moderate — let me know if you'd like to work through them.", "row_id": null, "created_at": "2026-07-22T10:15:00Z"},
+    {"id": 2, "role": "user", "content": "This looks weak, can you check the teardown report for memory specs?", "row_id": 3, "created_at": "2026-07-22T10:19:40Z"},
+    {"id": 3, "role": "assistant", "content": "Found it — the teardown report lists 8GB LPDDR5 onboard memory. Proposing an update to row 3.", "row_id": 3, "created_at": "2026-07-22T10:20:03Z"}
+  ]
+}
+```
+
+Empty array (not an error) if `/generate` hasn't run yet or no messages
+exist.
+
+**Errors**
+```json
 // 404 session_not_found
 {"error": {"code": "session_not_found", "message": "Session '3fa85f64-...' not found."}}
 ```

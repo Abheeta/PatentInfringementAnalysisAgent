@@ -112,6 +112,29 @@ def handle_message(sid: str, content: str, row_id: int | None) -> dict:
     return {"assistant_message": message, "refresh_chart": refresh_chart}
 
 
+def get_history(sid: str) -> list[dict]:
+    conn = get_connection()
+    try:
+        get_session(sid, conn)
+        rows = conn.execute(
+            """SELECT id, role, content, row_id, created_at FROM chat_messages
+               WHERE session_id = ? ORDER BY id ASC""",
+            (sid,),
+        ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "role": r["role"],
+                "content": r["content"],
+                "row_id": r["row_id"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
 def post_flag_system_note(sid: str, row_id: int) -> dict:
     content = f"Row {row_id} flagged for re-scan. What's wrong with the current evidence?"
     conn = get_connection()

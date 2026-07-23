@@ -1,5 +1,5 @@
 import { Row } from "../../types";
-import { useSessionDispatch } from "../../context/SessionContext";
+import { useSessionDispatch, useSessionState } from "../../context/SessionContext";
 import { PendingBanner } from "./PendingBanner";
 import { FlaggedBanner } from "./FlaggedBanner";
 import { UndoButton } from "./UndoButton";
@@ -15,11 +15,26 @@ const TIER_STYLES: Record<string, string> = {
 
 export function ChartRow({ row }: { row: Row }) {
   const dispatch = useSessionDispatch();
+  const { pendingRowId, chart } = useSessionState();
+  const selected = pendingRowId === row.id;
+  const anyFlagged = chart.rows.some((r) => r.flagged);
+
+  function handleRowClick() {
+    if (anyFlagged) return;
+    dispatch({ type: "ROW_CHIP_STAGED", rowId: selected ? null : row.id });
+  }
 
   return (
     <tr
-      onClick={() => dispatch({ type: "ROW_CHIP_STAGED", rowId: row.id })}
-      className="cursor-pointer border-b border-border/50 align-top hover:bg-accent/40"
+      onClick={handleRowClick}
+      className={cn(
+        "border-b border-border/50 align-top",
+        row.flagged
+          ? "bg-orange-50"
+          : selected
+            ? "bg-accent/40"
+            : !anyFlagged && "cursor-pointer hover:bg-accent/40"
+      )}
     >
       <td className="max-w-[16rem] px-4 py-3 font-medium text-foreground">
         {row.claim_element}

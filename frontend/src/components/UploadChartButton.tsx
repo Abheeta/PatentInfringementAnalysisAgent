@@ -5,8 +5,9 @@ import { ApiError } from "../types";
 import { useSessionDispatch, useSessionState } from "../context/SessionContext";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
-export function UploadChartButton() {
+export function UploadChartButton({ variant = "icon" }: { variant?: "icon" | "tile" }) {
   const { sessionId, chartUploaded } = useSessionState();
   const dispatch = useSessionDispatch();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,8 +28,32 @@ export function UploadChartButton() {
     }
   }
 
-  return (
-    <div className="relative">
+  const trigger =
+    variant === "tile" ? (
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={chartUploaded}
+        className={cn(
+          "flex flex-1 flex-col items-center justify-center gap-1.5 rounded-md border py-3.5 text-center transition-colors",
+          chartUploaded
+            ? "border-border/60 bg-secondary/60 text-secondary-foreground"
+            : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
+        )}
+      >
+        {chartUploaded ? (
+          <Check className="size-5 text-emerald-600 dark:text-emerald-400" />
+        ) : (
+          <FileSpreadsheet className="size-5" />
+        )}
+        <span className="text-xs font-medium">
+          {chartUploaded ? "Chart uploaded" : "Upload Chart"}
+        </span>
+        {!chartUploaded && (
+          <span className="text-[11px] text-muted-foreground">.csv file</span>
+        )}
+      </button>
+    ) : (
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -49,6 +74,11 @@ export function UploadChartButton() {
           {chartUploaded ? "Chart uploaded" : "Upload chart (.csv)"}
         </TooltipContent>
       </Tooltip>
+    );
+
+  return (
+    <div className={cn("relative", variant === "tile" && "flex flex-1")}>
+      {trigger}
       <input
         ref={inputRef}
         type="file"

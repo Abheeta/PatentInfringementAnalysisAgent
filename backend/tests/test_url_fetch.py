@@ -13,10 +13,17 @@ class _FakeResponse:
         self.text = text
 
 
-def test_fetch_url_requires_chart_uploaded(sid):
-    with pytest.raises(ApiError) as excinfo:
-        evidence_service.fetch_url(sid, "http://example.com")
-    assert excinfo.value.code == "chart_not_uploaded"
+def test_fetch_url_succeeds_without_chart_uploaded(monkeypatch, sid):
+    monkeypatch.setattr(
+        httpx,
+        "get",
+        lambda *a, **k: _FakeResponse(
+            200, "text/html", "<html><body>Signal reception module</body></html>"
+        ),
+    )
+    evidence_service.fetch_url(sid, "http://example.com")
+    pool = evidence_service.get_evidence_pool(sid)
+    assert "Signal reception module" in pool
 
 
 def test_fetch_url_non_200(monkeypatch, client, sid):
