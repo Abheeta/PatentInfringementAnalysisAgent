@@ -4,6 +4,7 @@ docs/superpowers/specs/2026-07-23-qwen-integration-design.md §1.
 
 import json
 import logging
+import time
 from abc import ABC, abstractmethod
 
 import httpx
@@ -45,6 +46,17 @@ class OllamaProvider(LLMProvider):
         self._timeout = timeout
 
     def generate(self, messages: list[dict], schema: dict) -> dict:
+        total_chars = sum(len(m.get("content", "")) for m in messages)
+        # Rough token estimate — not exact, just enough to judge whether a
+        # call is likely to be slow on CPU-only prefill (~4 chars/token).
+        approx_tokens = total_chars // 4
+        logger.info(
+            "Ollama request starting: model=%s num_ctx=%d messages=%d "
+            "content_chars=%d (~%d tokens)",
+            self._model, self._num_ctx, len(messages), total_chars, approx_tokens,
+        )
+
+        start = time.monotonic()
         try:
             response = httpx.post(
                 f"{self._host}/api/chat",
@@ -58,22 +70,37 @@ class OllamaProvider(LLMProvider):
                 timeout=self._timeout,
             )
         except httpx.TimeoutException:
+            elapsed = time.monotonic() - start
             raise LLMUnavailableError(
-                f"Ollama request timed out after {self._timeout}s."
+                f"Ollama request timed out after {self._timeout}s "
+                f"(waited {elapsed:.1f}s, ~{approx_tokens} input tokens)."
             )
         except httpx.HTTPError as exc:
             raise LLMUnavailableError(f"Could not reach Ollama: {exc}.")
 
+        elapsed = time.monotonic() - start
+
         if response.status_code != 200:
+            logger.warning(
+                "Ollama request failed after %.1fs: status %d",
+                elapsed, response.status_code,
+            )
             raise LLMUnavailableError(
                 f"Ollama returned status {response.status_code}."
             )
 
         try:
             content = response.json()["message"]["content"]
-            return json.loads(content)
+            result = json.loads(content)
         except (KeyError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "Ollama returned an unparseable response after %.1fs: %s",
+                elapsed, exc,
+            )
             raise LLMUnavailableError(f"Ollama returned an unparseable response: {exc}.")
+
+        logger.info("Ollama request completed in %.1fs", elapsed)
+        return result
 
 
 _provider_instance: LLMProvider | None = None

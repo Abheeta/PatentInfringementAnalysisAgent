@@ -1,0 +1,18 @@
+NovaMesh AX6000 Router — Technical Specification Sheet
+
+Wireless: Dual-band 802.11ax (Wi-Fi 6) radio, supporting simultaneous
+2.4GHz and 5GHz operation with speeds up to 6000 Mbps combined. Backward
+compatible with 802.11a/b/g/n/ac devices.
+
+Security: Built-in Threat Protection powered by AI continuously monitors
+network traffic and automatically blocks known malicious sites, malware,
+and phishing attempts. Threat Protection is enabled by default and updates
+its threat database automatically over the internet.
+
+Mesh Networking: The NovaMesh AX6000 supports whole-home mesh Wi-Fi and can
+be extended with up to 5 satellite mesh units, each communicating with the
+main router over a dedicated wireless backhaul channel to extend coverage
+without sacrificing speed.
+
+Power and Ports: One 2.5GbE WAN port, four 1GbE LAN ports. Powered via the
+included 12V/3A power adapter.

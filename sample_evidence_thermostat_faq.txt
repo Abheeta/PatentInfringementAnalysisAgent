@@ -1,0 +1,21 @@
+EcoTherm — Frequently Asked Questions
+
+Q: What is Smart Schedule?
+A: Smart Schedule learns your routine over the first two weeks of use and
+automatically adjusts your heating and cooling schedule to match, so you
+don't have to program it manually. Most customers see it start making
+useful suggestions within the first week.
+
+Q: Does Smart Schedule know when I'm home?
+A: Smart Schedule adapts based on how you interact with the thermostat over
+time — we don't publish the internal details of how it decides when to
+adjust the schedule.
+
+Q: Can EcoTherm tell me the humidity in my house?
+A: No. EcoTherm is a temperature-only thermostat and does not include a
+humidity sensor. If you need humidity monitoring, pair it with a separate
+EcoTherm Room Sensor accessory (sold separately).
+
+Q: Does EcoTherm work without Wi-Fi?
+A: Yes, basic heating/cooling control works locally. Wi-Fi is required for
+remote access, schedule syncing, and app notifications.

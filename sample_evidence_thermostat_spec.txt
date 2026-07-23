@@ -1,0 +1,17 @@
+EcoTherm Smart Thermostat — Technical Specification Sheet
+
+Sensing: The device uses an integrated NTC thermistor sensor to continuously
+measure ambient room temperature with an accuracy of +/-0.5F. Temperature
+readings are sampled every 30 seconds and displayed on the front LCD panel.
+
+Connectivity: A 2.4GHz 802.11n Wi-Fi module connects the thermostat to the
+home network. Once paired, the device syncs your schedule, target
+temperature, and system mode settings with the EcoTherm cloud app so they
+stay consistent across all your devices.
+
+Display: The front-facing LCD shows the current room temperature, the
+target setpoint, and the current system mode (Heat/Cool/Auto/Off). There is
+no secondary sensor for humidity or air quality in this model.
+
+Power: The thermostat is powered by the existing 24V HVAC control wiring;
+no batteries are required for normal operation.

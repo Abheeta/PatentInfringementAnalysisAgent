@@ -1,0 +1,5 @@
+Claim Element,Evidence,Reasoning
+a network interface configured to establish a wireless connection using an 802.11 protocol,Dual-band 802.11ax (Wi-Fi 6) radio,Spec sheet directly states 802.11ax (Wi-Fi 6) radio support
+a processor configured to perform packet inspection to detect malicious traffic,Built-in Threat Protection powered by AI,Marketing page references AI-powered threat protection but does not describe the underlying packet inspection mechanism
+a mesh networking module configured to communicate with a plurality of satellite nodes,Supports up to 5 satellite mesh units,Spec sheet confirms mesh networking with multiple satellite units
+a battery configured to provide backup power during a power outage,No mention found,No evidence located; user manual states the router requires constant AC power with no internal battery

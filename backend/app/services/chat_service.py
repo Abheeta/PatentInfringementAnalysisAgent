@@ -1,8 +1,12 @@
-from app.ai.features import disambiguation, refinement_proposal, regrounded_correction
+import logging
+
+from app.ai.features import refinement_proposal, regrounded_correction, router
 from app.db.connection import get_connection
 from app.errors import ApiError
 from app.services import chart_service
 from app.services.session_service import get_session
+
+logger = logging.getLogger(__name__)
 
 
 def _insert_message(conn, sid: str, role: str, content: str, row_id: int | None) -> dict:
@@ -35,14 +39,21 @@ def _recent_history(conn, sid: str, limit: int = 10) -> list[dict]:
     ]
 
 
-def _run_proposal(sid: str, row_id: int, content: str) -> tuple[str, bool]:
+def _run_row_turn(sid: str, row_id: int, content: str) -> tuple[str, bool]:
     """Returns (assistant_content, refresh_chart)."""
     row = chart_service.get_row(sid, row_id)
 
     if row["flagged"]:
+        logger.info("chat_service: session=%s row=%d -> regrounded_correction (flagged)", sid, row_id)
         result = regrounded_correction.correct(sid, row_id, content)
     else:
+        logger.info("chat_service: session=%s row=%d -> refinement_proposal", sid, row_id)
         result = refinement_proposal.propose(sid, row_id, content)
+
+    if result["intent"] == "answer":
+        # Answering a question about a flagged row doesn't resolve the flag
+        # cycle — only a completed `propose` does (ai-design-updated.md §6.5).
+        return result["answer"], False
 
     if result["no_evidence_found"]:
         if row["flagged"]:
@@ -85,20 +96,22 @@ def handle_message(sid: str, content: str, row_id: int | None) -> dict:
 
     resolved_row_id = row_id
     if resolved_row_id is None:
-        resolution = disambiguation.resolve_row(sid, content, history)
-        if resolution["needs_clarification"]:
+        logger.info("chat_service: session=%s no row_id given -> chat router", sid)
+        resolution = router.resolve_row(sid, content, history)
+        if resolution["intent"] in ("clarify", "answer"):
+            reply = resolution["question"] if resolution["intent"] == "clarify" else resolution["answer"]
             conn = get_connection()
             try:
-                message = _insert_message(
-                    conn, sid, "assistant", resolution["question"], None
-                )
+                message = _insert_message(conn, sid, "assistant", reply, None)
                 conn.commit()
             finally:
                 conn.close()
             return {"assistant_message": message, "refresh_chart": False}
         resolved_row_id = resolution["row_id"]
+    else:
+        logger.info("chat_service: session=%s row_id=%d given directly", sid, row_id)
 
-    assistant_content, refresh_chart = _run_proposal(sid, resolved_row_id, content)
+    assistant_content, refresh_chart = _run_row_turn(sid, resolved_row_id, content)
 
     conn = get_connection()
     try:

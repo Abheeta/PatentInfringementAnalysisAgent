@@ -1,0 +1,27 @@
+NovaMesh AX6000 — User Manual (excerpt)
+
+Chapter 2: Setup
+
+2.1 Power Connection
+Connect the included 12V/3A power adapter to the DC-IN port on the rear of
+the router and plug it into a standard wall outlet. The router requires
+constant AC power to operate — there is no internal battery, so the router
+and any connected satellite units will go offline during a power outage.
+If uninterrupted operation is required, connect the router to a UPS
+(uninterruptible power supply), sold separately.
+
+Chapter 5: Security Features
+
+5.1 Threat Protection
+Threat Protection continuously inspects inbound and outbound traffic
+against a cloud-updated database of known-malicious IP addresses, domains,
+and file signatures, blocking connections that match. It does not perform
+deep packet content analysis of unencrypted payloads beyond signature
+matching.
+
+Chapter 6: Mesh Setup
+
+6.1 Adding Satellite Units
+Use the NovaMesh app to add up to 5 satellite units to your mesh network.
+Each satellite automatically negotiates the best backhaul path to the main
+router or to another satellite, forming a self-healing mesh topology.

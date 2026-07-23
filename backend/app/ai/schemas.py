@@ -1,21 +1,24 @@
-def disambiguation_schema(row_ids: list[int]) -> dict:
+def router_schema(row_ids: list[int]) -> dict:
     return {
         "type": "object",
         "properties": {
+            "intent": {"type": "string", "enum": ["route", "clarify", "answer"]},
             "row_id": {"type": ["integer", "null"], "enum": [*row_ids, None]},
-            "needs_clarification": {"type": "boolean"},
             "question": {"type": ["string", "null"]},
+            "answer": {"type": ["string", "null"]},
         },
-        "required": ["row_id", "needs_clarification", "question"],
+        "required": ["intent", "row_id", "question", "answer"],
     }
 
 
-def proposal_schema(row_id: int) -> dict:
+def row_turn_schema(row_id: int) -> dict:
     return {
         "type": "object",
         "properties": {
             "row_id": {"type": "integer", "enum": [row_id]},
-            "no_evidence_found": {"type": "boolean"},
+            "intent": {"type": "string", "enum": ["answer", "propose"]},
+            "answer": {"type": ["string", "null"]},
+            "no_evidence_found": {"type": ["boolean", "null"]},
             "proposed_value": {"type": ["string", "null"]},
             "reasoning": {"type": ["string", "null"]},
             "confidence": {
@@ -25,6 +28,8 @@ def proposal_schema(row_id: int) -> dict:
         },
         "required": [
             "row_id",
+            "intent",
+            "answer",
             "no_evidence_found",
             "proposed_value",
             "reasoning",

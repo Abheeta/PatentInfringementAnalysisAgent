@@ -1,0 +1,5 @@
+Claim Element,Evidence,Reasoning
+a temperature sensor configured to detect ambient temperature,Integrated NTC thermistor sensor,Spec sheet lists a thermistor sensor for ambient temperature detection
+a wireless transceiver configured to transmit temperature data to a remote server,Wi-Fi module syncs settings with the cloud app,Spec sheet mentions Wi-Fi sync but does not explicitly confirm temperature readings are what gets transmitted
+a machine learning model configured to predict occupancy patterns,Smart Schedule feature learns your routine,FAQ references a learning schedule feature without describing the underlying model or what signals it uses
+a display configured to render a current humidity reading,No mention found,No evidence located; documentation only describes a temperature display
