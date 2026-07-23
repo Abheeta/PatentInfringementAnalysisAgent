@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-border: hsl(220 14% 88%);
+  --color-input: hsl(220 14% 88%);
+  --color-ring: hsl(220 9% 46%);
+
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(222 12% 18%);
+
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222 12% 18%);
+
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(222 12% 18%);
+
+  --color-primary: hsl(222 14% 22%);
+  --color-primary-foreground: hsl(0 0% 98%);
+
+  --color-secondary: hsl(220 16% 94%);
+  --color-secondary-foreground: hsl(222 12% 22%);
+
+  --color-muted: hsl(220 16% 95%);
+  --color-muted-foreground: hsl(220 9% 46%);
+
+  --color-accent: hsl(220 16% 92%);
+  --color-accent-foreground: hsl(222 12% 22%);
+
+  --color-destructive: hsl(4 62% 47%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+
+  /* Soft pastel panel surfaces, distinct from --color-background */
+  --color-chat-surface: hsl(250 35% 97.5%);
+  --color-chart-surface: hsl(210 30% 97.5%);
+  --color-toolbar-surface: hsl(250 25% 95.5%);
+
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
