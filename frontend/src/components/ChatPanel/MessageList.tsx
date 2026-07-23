@@ -3,7 +3,7 @@ import { RowChip } from "./RowChip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
-export function MessageList() {
+export function MessageList({ thinking }: { thinking: boolean }) {
   const { chatMessages } = useSessionState();
 
   return (
@@ -28,6 +28,13 @@ export function MessageList() {
             <span className="whitespace-pre-wrap">{message.content}</span>
           </div>
         ))}
+        {thinking && (
+          <div className="flex max-w-[85%] items-center gap-1 self-start rounded-lg bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+            <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-current" />
+          </div>
+        )}
       </div>
     </ScrollArea>
   );

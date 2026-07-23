@@ -9,12 +9,17 @@ import { UploadEvidenceButton } from "../UploadEvidenceButton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export function ChatInput() {
+export function ChatInput({
+  sending,
+  setSending,
+}: {
+  sending: boolean;
+  setSending: (sending: boolean) => void;
+}) {
   const { sessionId, pendingRowId, generated } = useSessionState();
   const dispatch = useSessionDispatch();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
 
   async function handleSubmit() {
     if (!sessionId || !text.trim() || sending) return;

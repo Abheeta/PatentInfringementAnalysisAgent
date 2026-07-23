@@ -5,8 +5,9 @@ class Settings:
     LLM_PROVIDER: str = os.environ.get("LLM_PROVIDER", "ollama")
 
     OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-    OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+    OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
     OLLAMA_NUM_CTX: int = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
+    OLLAMA_TIMEOUT: float = float(os.environ.get("OLLAMA_TIMEOUT", "120"))
 
     OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL: str = os.environ.get(
