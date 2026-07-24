@@ -9,6 +9,7 @@ from app.ai import provider as ai_provider
 from app.ai import schemas, validation
 from app.ai.baseline_prompt import BASELINE_PROMPT
 from app.ai.provider import LLMUnavailableError
+from app.ai.row_display import display_offset, to_display_id, to_real_id
 from app.ai.validation import StructuredOutputError
 from app.services import evidence_service, session_service
 from app.services.chart_service import get_rows
@@ -48,9 +49,9 @@ _RETRY_NOTE = (
 )
 
 
-def _format_chart(rows: list[dict]) -> str:
+def _format_chart(rows: list[dict], offset: int) -> str:
     lines = [
-        f"Row {r['id']}: claim_element={r['claim_element']!r}, "
+        f"Row {to_display_id(offset, r['id'])}: claim_element={r['claim_element']!r}, "
         f"current_evidence={r['product_feature']!r}"
         for r in rows
     ]
@@ -87,9 +88,10 @@ def resolve_row(sid: str, message: str, history: list[dict]) -> dict:
     if system_prompt:
         system_content += "\n\n" + system_prompt
 
+    offset = display_offset(rows)
     user_content = (
         f"{_TASK_INSTRUCTION}\n\n"
-        f"Chart:\n{_format_chart(rows)}\n\n"
+        f"Chart:\n{_format_chart(rows, offset)}\n\n"
         f"Evidence pool:\n{evidence_pool}\n\n"
         f"Recent conversation:\n{_format_history(history)}\n\n"
         f"Analyst's new message:\n{message}"
@@ -99,7 +101,7 @@ def resolve_row(sid: str, message: str, history: list[dict]) -> dict:
         {"role": "system", "content": system_content},
         {"role": "user", "content": user_content},
     ]
-    schema = schemas.router_schema([r["id"] for r in rows])
+    schema = schemas.router_schema([to_display_id(offset, r["id"]) for r in rows])
 
     try:
         result = validation.call_with_retry(
@@ -113,5 +115,7 @@ def resolve_row(sid: str, message: str, history: list[dict]) -> dict:
         raise LLMUnavailableError(
             f"Model could not produce a usable router response: {exc}"
         )
+    if result["intent"] == "route":
+        result["row_id"] = to_real_id(offset, result["row_id"])
     logger.info("chat router: session=%s resolved intent=%s", sid, result["intent"])
     return result

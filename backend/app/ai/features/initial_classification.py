@@ -6,6 +6,7 @@ from app.ai import provider as ai_provider
 from app.ai import schemas, validation
 from app.ai.baseline_prompt import BASELINE_PROMPT
 from app.ai.provider import LLMUnavailableError
+from app.ai.row_display import display_offset, to_display_id, to_real_id
 from app.ai.validation import StructuredOutputError
 from app.services import evidence_service, session_service
 from app.services.chart_service import get_rows
@@ -32,9 +33,9 @@ _RETRY_NOTE = (
 )
 
 
-def _format_chart(rows: list[dict]) -> str:
+def _format_chart(rows: list[dict], offset: int) -> str:
     lines = [
-        f"Row {r['id']}: claim_element={r['claim_element']!r}, "
+        f"Row {to_display_id(offset, r['id'])}: claim_element={r['claim_element']!r}, "
         f"evidence={r['product_feature']!r}, reasoning={r['ai_reasoning']!r}"
         for r in rows
     ]
@@ -50,9 +51,10 @@ def classify_all(sid: str) -> list[dict]:
     if system_prompt:
         system_content += "\n\n" + system_prompt
 
+    offset = display_offset(rows)
     user_content = (
         f"{_TASK_INSTRUCTION}\n\n"
-        f"Chart:\n{_format_chart(rows)}\n\n"
+        f"Chart:\n{_format_chart(rows, offset)}\n\n"
         f"Evidence pool:\n{evidence_pool}"
     )
 
@@ -60,20 +62,23 @@ def classify_all(sid: str) -> list[dict]:
         {"role": "system", "content": system_content},
         {"role": "user", "content": user_content},
     ]
-    row_ids = [r["id"] for r in rows]
-    schema = schemas.classification_schema(row_ids)
+    display_ids = [to_display_id(offset, r["id"]) for r in rows]
+    schema = schemas.classification_schema(display_ids)
 
     try:
         result = validation.call_with_retry(
             ai_provider.get_provider(),
             messages,
             schema,
-            validation.validate_classification_rowset(row_ids),
+            validation.validate_classification_rowset(display_ids),
             _RETRY_NOTE,
         )
     except StructuredOutputError as exc:
         raise LLMUnavailableError(
             f"Model could not produce a valid classification for every row: {exc}"
         )
+
+    for item in result["classifications"]:
+        item["row_id"] = to_real_id(offset, item["row_id"])
 
     return result["classifications"]

@@ -2,6 +2,7 @@ import csv
 import io
 import sqlite3
 
+from app.ai.row_display import to_display_id
 from app.db.connection import get_connection
 from app.errors import ApiError
 from app.services.session_service import get_session
@@ -76,6 +77,26 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     }
 
 
+def _display_offset(conn: sqlite3.Connection, sid: str) -> int | None:
+    row = conn.execute(
+        "SELECT MIN(id) AS min_id FROM rows WHERE session_id = ?", (sid,)
+    ).fetchone()
+    return row["min_id"]
+
+
+def _display_id(conn: sqlite3.Connection, sid: str, row_id: int) -> int:
+    offset = _display_offset(conn, sid)
+    return row_id if offset is None else to_display_id(offset, row_id)
+
+
+def get_display_offset(sid: str) -> int:
+    conn = get_connection()
+    try:
+        return _display_offset(conn, sid)
+    finally:
+        conn.close()
+
+
 def get_rows(sid: str) -> list[dict]:
     conn = get_connection()
     try:
@@ -97,7 +118,11 @@ def _get_row(conn: sqlite3.Connection, sid: str, row_id: int) -> sqlite3.Row:
         "SELECT * FROM rows WHERE id = ? AND session_id = ?", (row_id, sid)
     ).fetchone()
     if row is None:
-        raise ApiError(404, "row_not_found", f"Row {row_id} not found in this session.")
+        raise ApiError(
+            404,
+            "row_not_found",
+            f"Row {_display_id(conn, sid, row_id)} not found in this session.",
+        )
     return row
 
 
@@ -169,7 +194,7 @@ def accept(sid: str, row_id: int) -> None:
             raise ApiError(
                 409,
                 "no_pending_proposal",
-                f"Row {row_id} has no pending proposal to accept.",
+                f"Row {_display_id(conn, sid, row_id)} has no pending proposal to accept.",
             )
         conn.execute(
             """UPDATE rows SET
@@ -206,7 +231,7 @@ def reject(sid: str, row_id: int) -> None:
             raise ApiError(
                 409,
                 "no_pending_proposal",
-                f"Row {row_id} has no pending proposal to reject.",
+                f"Row {_display_id(conn, sid, row_id)} has no pending proposal to reject.",
             )
         conn.execute(
             """UPDATE rows SET pending_value = NULL, pending_reasoning = NULL,
@@ -226,7 +251,7 @@ def undo(sid: str, row_id: int) -> None:
             raise ApiError(
                 409,
                 "no_undo_available",
-                f"Row {row_id} has no previous value to undo to.",
+                f"Row {_display_id(conn, sid, row_id)} has no previous value to undo to.",
             )
         conn.execute(
             """UPDATE rows SET
@@ -257,7 +282,8 @@ def set_flagged(sid: str, row_id: int) -> None:
             raise ApiError(
                 409,
                 "already_flagged",
-                f"Row {row_id} is already awaiting your description of the issue.",
+                f"Row {_display_id(conn, sid, row_id)} is already awaiting your "
+                "description of the issue.",
             )
         blocking = conn.execute(
             "SELECT id FROM rows WHERE session_id = ? AND flagged = 1", (sid,)
@@ -266,8 +292,9 @@ def set_flagged(sid: str, row_id: int) -> None:
             raise ApiError(
                 409,
                 "already_flagged",
-                f"Row {blocking['id']} is already awaiting your description of "
-                "the issue — resolve it before flagging another row.",
+                f"Row {_display_id(conn, sid, blocking['id'])} is already "
+                "awaiting your description of the issue — resolve it before "
+                "flagging another row.",
             )
         conn.execute("UPDATE rows SET flagged = 1 WHERE id = ?", (row_id,))
         conn.commit()

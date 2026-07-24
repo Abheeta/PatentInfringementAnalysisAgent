@@ -1,6 +1,7 @@
 import logging
 
 from app.ai.features import refinement_proposal, regrounded_correction, router
+from app.ai.row_display import to_display_id
 from app.db.connection import get_connection
 from app.errors import ApiError
 from app.services import chart_service
@@ -42,6 +43,7 @@ def _recent_history(conn, sid: str, limit: int = 10) -> list[dict]:
 def _run_row_turn(sid: str, row_id: int, content: str) -> tuple[str, bool]:
     """Returns (assistant_content, refresh_chart)."""
     row = chart_service.get_row(sid, row_id)
+    display_id = to_display_id(chart_service.get_display_offset(sid), row_id)
 
     if row["flagged"]:
         logger.info("chat_service: session=%s row=%d -> regrounded_correction (flagged)", sid, row_id)
@@ -59,7 +61,7 @@ def _run_row_turn(sid: str, row_id: int, content: str) -> tuple[str, bool]:
         if row["flagged"]:
             chart_service.clear_flagged(row_id)
         return (
-            f"I couldn't find supporting evidence for row {row_id} in the "
+            f"I couldn't find supporting evidence for row {display_id} in the "
             "uploaded docs. Can you upload another document or provide a URL?",
             False,
         )
@@ -70,7 +72,7 @@ def _run_row_turn(sid: str, row_id: int, content: str) -> tuple[str, bool]:
     if row["flagged"]:
         chart_service.clear_flagged(row_id)
 
-    return f"Proposing an update to row {row_id}: {result['reasoning']}", True
+    return f"Proposing an update to row {display_id}: {result['reasoning']}", True
 
 
 def handle_message(sid: str, content: str, row_id: int | None) -> dict:
@@ -149,7 +151,8 @@ def get_history(sid: str) -> list[dict]:
 
 
 def post_flag_system_note(sid: str, row_id: int) -> dict:
-    content = f"Row {row_id} flagged for re-scan. What's wrong with the current evidence?"
+    display_id = to_display_id(chart_service.get_display_offset(sid), row_id)
+    content = f"Row {display_id} flagged for re-scan. What's wrong with the current evidence?"
     conn = get_connection()
     try:
         message = _insert_message(conn, sid, "assistant", content, row_id)

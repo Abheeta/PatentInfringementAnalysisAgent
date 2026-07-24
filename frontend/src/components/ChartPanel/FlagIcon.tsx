@@ -6,6 +6,7 @@ import { useSessionDispatch, useSessionState } from "../../context/SessionContex
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { toDisplayRowId } from "../../lib/rowDisplay";
 
 export function FlagIcon({ row }: { row: Row }) {
   const { sessionId, chart } = useSessionState();
@@ -33,7 +34,7 @@ export function FlagIcon({ row }: { row: Row }) {
   }
 
   const tooltip = blockingRow
-    ? `Resolve the flag on row ${blockingRow.id} first`
+    ? `Resolve the flag on row ${toDisplayRowId(chart.rows, blockingRow.id)} first`
     : "Flag for re-scan";
 
   return (
